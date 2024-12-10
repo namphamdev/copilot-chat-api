@@ -174,6 +174,48 @@ def process_messages(model='claude-3.5-sonnet', messages=[], temperature=0, max_
         logging.error(f'API request failed: {e}')
         return None
 
+def copilot(model, prompt, language='python'):
+    global token
+    # If the token is None, get a new one
+    if token is None or is_token_invalid(token):
+        get_token()
+
+    try:
+        resp = requests.post('https://copilot-proxy.githubusercontent.com/v1/engines/copilot-codex/completions', headers={'authorization': f'Bearer {token}'}, json={
+            'prompt': prompt,
+            'model': model,
+            'suffix': '',
+            'max_tokens': 1000,
+            'temperature': 0,
+            'top_p': 1,
+            'n': 1,
+            'stop': ['\n'],
+            'nwo': 'github/copilot.vim',
+            'stream': True,
+            'extra': {
+                'language': language
+            }
+        })
+    except requests.exceptions.ConnectionError:
+        return ''
+
+    result = ''
+
+    # Parse the response text, splitting it by newlines
+    resp_text = resp.text.split('\n')
+    for line in resp_text:
+        # If the line contains a completion, print it
+        if line.startswith('data: {'):
+            # Parse the completion from the line as json
+            json_completion = json.loads(line[6:])
+            completion = json_completion.get('choices')[0].get('text')
+            if completion:
+                result += completion
+            else:
+                result += '\n'
+    
+    return result
+
 # Check if the token is invalid through the exp field
 def is_token_invalid(token):
     if token is None or 'exp' not in token or extract_exp_value(token) <= time.time():
@@ -246,6 +288,16 @@ def chat_completions():
         logging.error(f'Error in chat_completions: {e}')
         return jsonify({'error': 'Internal Server Error'}), 500
 
+@app.route('/v1/code/completions', methods=['POST'])
+def code_completions():
+    data = request.json
+    prompt = data.get('prompt')
+    model = data.get('model')
+    language = data.get('language', 'python')
+    
+    completion = copilot(model, prompt, language)
+    return app.response_class(completion, mimetype='text/plain')
+    
 def main():
     # Every 25 minutes, get a new token
     threading.Thread(target=token_thread).start()

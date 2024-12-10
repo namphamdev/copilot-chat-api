@@ -24,7 +24,9 @@ pip install -r requirements.txt
 python3 api.py [port]
 ```
 
-## Usage
+# Usage
+
+## Chat Completions
 
 Send a POST request to `http://localhost:8080/v1/chat/completions` with the following JSON body
 
@@ -49,3 +51,26 @@ Send a POST request to `http://localhost:8080/v1/chat/completions` with the foll
 #### Non-Stream
 
 ![Non-Streamed Responses](/images/no-stream.png)
+
+## Code Completion
+
+Send a POST request to `http://localhost:8080/api` with the following JSON body
+
+#### Payload
+
+```json
+{
+  "prompt": "# hello world function\n\n",
+  "language": "python"
+}
+```
+
+#### Response
+
+The response will be a plain text string containing the generated code.
+
+```text
+def hello_world():
+```
+
+In order to build a complete code snippet, iteratively append the generated code to the prompt and send it back to the API until the response is empty.
