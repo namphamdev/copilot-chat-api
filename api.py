@@ -15,6 +15,44 @@ app = Flask(__name__)
 
 token = None
 
+def make_copilot_request(token, messages, model, temperature=0, max_tokens=9999999, timeout=30):
+    """
+    Make a POST request to GitHub Copilot's API for chat completions.
+    
+    Args:
+        token (str): Authentication token
+        messages (list): List of conversation messages
+        model (str): Model to use for completion
+        temperature (float): Temperature for response randomness
+        max_tokens (int): Maximum tokens for completion
+        timeout (int): Request timeout in seconds
+        
+    Returns:
+        requests.Response: The response object from the request
+    """
+    return requests.post(
+        'https://api.individual.githubcopilot.com/chat/completions',
+        headers={
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Editor-Version': 'vscode/1.95.3',
+            'Editor-Plugin-Version': 'copilot-chat/0.22.4',
+            'Openai-Intent': 'conversation-panel',
+            'X-Github-Api-Version': '2023-07-07'
+        },
+        json={
+            'messages': messages,
+            'model': model,
+            'temperature': temperature,
+            'max_tokens': max_tokens,
+            'stream': True,
+            'n': 1
+        },
+        stream=True,
+        timeout=timeout
+    )
+
 def setup():
     resp = requests.post('https://github.com/login/device/code', headers={
             'accept': 'application/json',
@@ -107,33 +145,13 @@ def convert_messages_format(input_messages):
         return converted_messages
     return input_messages
 
-def process_messages(model='claude-3.5-sonnet', messages=[], temperature=0, max_tokens=1000):
+def process_messages(model='claude-3.5-sonnet', messages=[], temperature=0, max_tokens=9999999):
     global token
     if token is None or is_token_invalid(token):
         get_token()
 
     try:
-        resp = requests.post(
-            'https://api.individual.githubcopilot.com/chat/completions',
-            headers={
-                'Authorization': f'Bearer {token}',
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Editor-Version': 'vscode/1.95.3',
-                'Editor-Plugin-Version': 'copilot-chat/0.22.4',
-                'Openai-Intent': 'conversation-panel',
-                'X-Github-Api-Version': '2023-07-07'},
-            json={
-                'messages': messages,
-                'model': model,
-                'temperature': temperature,
-                'max_tokens': max_tokens,
-                'stream': True,
-                'n': 1
-            },
-            stream=True,
-            timeout=30
-        )
+        resp = make_copilot_request(token, messages, model, temperature, max_tokens)
         resp.raise_for_status()
 
         result = ''
@@ -181,7 +199,7 @@ def chat_completions():
     messages = data.get('messages')
     converted_messages = convert_messages_format(messages)
     temperature = data.get('temperature', 1.0)
-    max_tokens = data.get('max_tokens', 1000)
+    max_tokens = data.get('max_tokens', 9999999)
     stream = data.get('stream', False)
 
     # Check for required fields
@@ -220,76 +238,13 @@ def chat_completions():
 
             return app.response_class(generate(), mimetype='application/json')
         else:
-            resp = requests.post(
-                    'https://api.individual.githubcopilot.com/chat/completions',
-                    headers={
-                        'Authorization': f'Bearer {token}',
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'Editor-Version': 'vscode/1.95.3',
-                        'Editor-Plugin-Version': 'copilot-chat/0.22.4',
-                        'Openai-Intent': 'conversation-panel',
-                        'X-Github-Api-Version': '2023-07-07'},
-                    json={
-                        'messages': converted_messages,
-                        'model': model,
-                        'temperature': temperature,
-                        'max_tokens': max_tokens,
-                        'stream': True,
-                        'n': 1
-                    },
-                    stream=True,
-                    timeout=30
-                )
+            resp = make_copilot_request(token, converted_messages, model, temperature, max_tokens)
             resp.raise_for_status()
             return Response(resp.iter_content(chunk_size=1024), content_type="text/event-stream")
             
     except Exception as e:
         logging.error(f'Error in chat_completions: {e}')
         return jsonify({'error': 'Internal Server Error'}), 500
-
-# @app.route('/v1/chat/completions', methods=['POST'])
-# def copilot_endpoint():
-#     model = request.json.get('model')
-#     messages = request.json.get('messages')
-#     temperature = request.json.get('temperature', 1.0)
-#     max_tokens = request.json.get('max_tokens', 100)
-
-#     global token
-#     if token is None or is_token_invalid(token):
-#         get_token()
-
-#     converted_messages = convert_messages_format(messages)
-#     try:
-#         resp = requests.post(
-#             'https://api.individual.githubcopilot.com/chat/completions',
-#             headers={
-#                 'Authorization': f'Bearer {token}',
-#                 'Content-Type': 'application/json',
-#                 'Accept': 'application/json',
-#                 'Editor-Version': 'vscode/1.95.3',
-#                 'Editor-Plugin-Version': 'copilot-chat/0.22.4',
-#                 'Openai-Intent': 'conversation-panel',
-#                 'X-Github-Api-Version': '2023-07-07'},
-#             json={
-#                 'messages': converted_messages,
-#                 'model': model,
-#                 'temperature': temperature,
-#                 'max_tokens': max_tokens,
-#                 'stream': True,
-#                 'n': 1
-#             },
-#             stream=True,
-#             timeout=30
-#         )
-#         resp.raise_for_status()
-        
-#         return Response(resp.iter_content(chunk_size=1024), content_type="text/event-stream")
-    
-#     except requests.exceptions.RequestException as e:
-#         logging.error(f'API request failed: {e}')
-#         # logging.info(f'Input parameters: model={model}, messages={messages}, temperature={temperature}, max_tokens={max_tokens}')
-#         return jsonify({'error': 'API request failed'}), 500
 
 def main():
     # Every 25 minutes, get a new token

@@ -1,44 +1,51 @@
-# OpenAI Compatible - Copilot Chat API
+# Copilot Chat API (OpenAI Compatible)
 
 Provides a simple HTTP API to interface with GitHub Copilot, including native GitHub authentication.
 
-Forked from [Copilot API](https://github.com/B00TK1D/copilot-api).
+Forked from [Copilot API](https://github.com/B00TK1D/copilot-api) to include chat endpoint.
 
-## Installing dependencies
+## Supports Cline
 
-`pip install -r requirements.txt`
+Set your API provider to OpenAI Compatible and the Base URL to this server.
+
+Change your model to any model supported by Copilot.
+
+![cline](/images/cline.png)
+
+## Dependencies
+
+```
+pip install -r requirements.txt
+```
 
 ## Run
 
-`python3 api.py [port]`
+```
+python3 api.py [port]
+```
 
 ## Usage
 
-Send a POST request to `http://localhost:8080/api` with the following JSON body
+Send a POST request to `http://localhost:8080/v1/chat/completions` with the following JSON body
 
-### Request Payload
+### Payload
 
 ```json
 {
   "model": "claude-3.5-sonnet",
   "messages": [{ "role": "user", "content": "Hello, how are you?" }],
-  "temperature": 0.7
+  "temperature": 0.7, // default: 1.0
+  "max_tokens": 1000 // default: 9999999
+  "stream": true, // default: false
 }
 ```
 
 ### Response
 
-```json
-{
-  "choices": [
-    {
-      "finish_reason": "stop",
-      "index": 0,
-      "message": "Hi! I'm doing well, thanks for asking. How are you today?"
-    }
-  ],
-  "created": 1733830720,
-  "id": "4e3c06e8-0783-4b3e-9dbf-06ed72211bb2",
-  "object": "chat.completion"
-}
-```
+#### Stream
+
+![Streamed Responses](/images/stream.png)
+
+#### Non-Stream
+
+![Non-Streamed Responses](/images/no-stream.png)
