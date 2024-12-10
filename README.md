@@ -8,7 +8,7 @@ Forked from [Copilot API](https://github.com/B00TK1D/copilot-api) to include cha
 
 Set your API provider to OpenAI Compatible and the Base URL to this server.
 
-Change your model to any model supported by Copilot.
+Your API key can be anything. Change your model to any model supported by Copilot.
 
 ![cline](/images/cline.png)
 
