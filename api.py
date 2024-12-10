@@ -4,6 +4,10 @@ import requests
 import json
 import time
 import sys
+import uuid
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
 
 token = None
 
@@ -15,7 +19,7 @@ def setup():
             'content-type': 'application/json',
             'user-agent': 'GithubCopilot/1.155.0',
             'accept-encoding': 'gzip,deflate,br'
-        })
+        }, data='{"client_id":"Iv1.b507a08c87ecfe98","scope":"read:user"}')
 
 
     # Parse the response json, isolating the device_code, user_code, and verification_uri
@@ -37,7 +41,7 @@ def setup():
             'content-type': 'application/json',
             'user-agent': 'GithubCopilot/1.155.0',
             'accept-encoding': 'gzip,deflate,br'
-            }, data=f'{{"device_code":"{device_code}","grant_type":"urn:ietf:params:oauth:grant-type:device_code"}}')
+            }, data=f'{{"client_id":"Iv1.b507a08c87ecfe98","device_code":"{device_code}","grant_type":"urn:ietf:params:oauth:grant-type:device_code"}}')
 
         # Parse the response json, isolating the access_token
         resp_json = resp.json()
@@ -51,7 +55,6 @@ def setup():
         f.write(access_token)
 
     print('Authentication success!')
-
 
 def get_token():
     global token
@@ -97,8 +100,7 @@ def copilot(messages, model='claude-3.5-sonnet', language='python'):
                 'Editor-Version': 'vscode/1.95.3',
                 'Editor-Plugin-Version': 'copilot-chat/0.22.4',
                 'Openai-Intent': 'conversation-panel',
-                'X-Github-Api-Version': '2023-07-07'
-            },
+                'X-Github-Api-Version': '2023-07-07'},
             json={
                 'messages': messages,
                 'model': model,
@@ -146,36 +148,45 @@ def extract_exp_value(token):
             return int(value.strip())
     return None
 
-class HTTPRequestHandler(http.server.BaseHTTPRequestHandler):
-   def do_POST(self):
-    # Read and parse JSON request body
-    content_length = int(self.headers['Content-Length'])
-    request_body = self.rfile.read(content_length).decode('utf-8')
-    try:
-        request_data = json.loads(request_body)
-        
-        # Extract messages and model from request
-        messages = request_data.get('messages', [])
-        model = request_data.get('model', 'claude-3.5-sonnet')
-        
-        # Call copilot with correct parameters
-        completion = copilot(messages=messages, model=model)
-        
-        # Send response
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        
-        response = {
-            'completion': completion if completion else 'No response generated'
-        }
-        self.wfile.write(json.dumps(response).encode())
-        
-    except json.JSONDecodeError:
-        self.send_error(400, "Invalid JSON")
-    except ValueError as e:
-        self.send_error(400, str(e))
+def generate_response(model, messages, temperature):
+    return copilot(messages=messages, model=model)
 
+# OpenAI compatible API endpoint
+@app.route('/v1/chat/completions', methods=['POST'])
+def chat_completions():
+    data = request.json
+    model = data.get('model')
+    messages = data.get('messages')
+    temperature = data.get('temperature', 1.0)
+
+    done = False
+    def generate():
+        nonlocal done
+        response_content = generate_response(model, messages, temperature)
+        if response_content is None:
+            yield json.dumps({'error': 'API request failed'}).encode('utf-8'), 500
+            done = True
+        else:
+            yield json.dumps({
+                'id': str(uuid.uuid4()),
+                'object': 'chat.completion',
+                'created': int(time.time()),
+                'model': model,
+                'choices': [
+                    {
+                        'message': {
+                            'role': 'assistant',
+                            'content': response_content
+                        },
+                        'logprobs': None,
+                        'finish_reason': 'stop',
+                        'index': 0
+                    }
+                ]
+            }).encode('utf-8')
+            done = True
+
+    return app.response_class(generate(), mimetype='application/json')
 
 def main():
     # Every 25 minutes, get a new token
@@ -186,9 +197,7 @@ def main():
     else:
         port = int(sys.argv[1])
     # Start the http server
-    httpd = http.server.HTTPServer(('0.0.0.0', port), HTTPRequestHandler)
-    print(f'Listening on port 0.0.0.0:{port}...')
-    httpd.serve_forever()
+    app.run(host='0.0.0.0', port=port)
 
 if __name__ == '__main__':
     main()
