@@ -6,6 +6,10 @@ import time
 import sys
 import uuid
 from flask import Flask, request, jsonify
+import logging
+
+# Set up logging configuration
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 app = Flask(__name__)
 
@@ -85,11 +89,37 @@ def token_thread():
         get_token()
         time.sleep(25 * 60)
     
+def convert_messages_format(input_messages):
+    if isinstance(input_messages, list):
+        converted_messages = []
+        for message in input_messages:
+            if isinstance(message, dict) and 'role' in message and 'content' in message:
+                role = message['role']
+                content = message['content']
+                # Check if content is a list
+                if isinstance(content, list):
+                    combined_text = ''.join(item['text'] for item in content if isinstance(item, dict) and 'text' in item)
+                elif isinstance(content, str):
+                    combined_text = content
+                else:
+                    combined_text = str(content)  # Convert to string if not a list or string
+                converted_messages.append({'role': role, 'content': combined_text})
+        return converted_messages
+    return input_messages
+
 def copilot(model='claude-3.5-sonnet', messages=[], temperature=0, max_tokens=9999999):
     global token
     if token is None or is_token_invalid(token):
         get_token()
 
+    converted_messages = convert_messages_format(messages)
+    # logging.info(json.dumps({
+    #     "model": model,
+    #     "messages": converted_messages,
+    #     "temperature": temperature,
+    #     "max_tokens": max_tokens
+    # }))
+    
     try:
         resp = requests.post(
             'https://api.individual.githubcopilot.com/chat/completions',
@@ -102,7 +132,7 @@ def copilot(model='claude-3.5-sonnet', messages=[], temperature=0, max_tokens=99
                 'Openai-Intent': 'conversation-panel',
                 'X-Github-Api-Version': '2023-07-07'},
             json={
-                'messages': messages,
+                'messages': converted_messages,
                 'model': model,
                 'temperature': temperature,
                 'max_tokens': max_tokens,
@@ -131,7 +161,8 @@ def copilot(model='claude-3.5-sonnet', messages=[], temperature=0, max_tokens=99
         return result
 
     except requests.exceptions.RequestException as e:
-        print(f"API request failed: {str(e)}")
+        logging.error(f'API request failed: {e}')
+        # logging.info(f'Input parameters: model={model}, messages={messages}, temperature={temperature}, max_tokens={max_tokens}')
         return None
 
 # Check if the token is invalid through the exp field
@@ -155,39 +186,50 @@ def generate_response(model, messages, temperature, max_tokens):
 @app.route('/v1/chat/completions', methods=['POST'])
 def chat_completions():
     data = request.json
+    # logging.info(f'Received data: {data}')  # Log the incoming request data
     model = data.get('model')
     messages = data.get('messages')
     temperature = data.get('temperature', 1.0)
     max_tokens = data.get('max_tokens', 1000)
 
-    done = False
-    def generate():
-        nonlocal done
-        response_content = generate_response(model, messages, temperature, max_tokens)
-        if response_content is None:
-            yield json.dumps({'error': 'API request failed'}).encode('utf-8')
-            done = True
-        else:
-            yield json.dumps({
-                'id': str(uuid.uuid4()),
-                'object': 'chat.completion',
-                'created': int(time.time()),
-                'model': model,
-                'choices': [
-                    {
-                        'message': {
-                            'role': 'assistant',
-                            'content': response_content
-                        },
-                        'logprobs': None,
-                        'finish_reason': 'stop',
-                        'index': 0
-                    }
-                ]
-            }).encode('utf-8')
-            done = True
+    # Check for required fields
+    if model is None or messages is None:
+        logging.error('Missing required fields: model or messages')
+        return jsonify({'error': 'Missing required fields'}), 400
 
-    return app.response_class(generate(), mimetype='application/json')
+    try:
+        done = False
+        def generate():
+            nonlocal done
+            response_content = generate_response(model, messages, temperature, max_tokens)
+            if response_content is None:
+                # logging.error(f'API request failed for model: {model}, messages: {messages}, temperature: {temperature}, max_tokens: {max_tokens}')
+                yield json.dumps({'error': 'API request failed'}).encode('utf-8')
+                done = True
+            else:
+                yield json.dumps({
+                    'id': str(uuid.uuid4()),
+                    'object': 'chat.completion',
+                    'created': int(time.time()),
+                    'model': model,
+                    'choices': [
+                        {
+                            'message': {
+                                'role': 'assistant',
+                                'content': response_content
+                            },
+                            'logprobs': None,
+                            'finish_reason': 'stop',
+                            'index': 0
+                        }
+                    ]
+                }).encode('utf-8')
+                done = True
+
+        return app.response_class(generate(), mimetype='application/json')
+    except Exception as e:
+        logging.error(f'Error in chat_completions: {e}')
+        return jsonify({'error': 'Internal Server Error'}), 500
 
 def main():
     # Every 25 minutes, get a new token
