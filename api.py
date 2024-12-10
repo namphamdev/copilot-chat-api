@@ -85,7 +85,7 @@ def token_thread():
         get_token()
         time.sleep(25 * 60)
     
-def copilot(messages, model='claude-3.5-sonnet', language='python'):
+def copilot(model='claude-3.5-sonnet', messages=[], temperature=0, max_tokens=9999999):
     global token
     if token is None or is_token_invalid(token):
         get_token()
@@ -104,8 +104,8 @@ def copilot(messages, model='claude-3.5-sonnet', language='python'):
             json={
                 'messages': messages,
                 'model': model,
-                'temperature': 0,
-                'max_tokens': 9999999,
+                'temperature': temperature,
+                'max_tokens': max_tokens,
                 'stream': True,
                 'n': 1
             },
@@ -148,8 +148,8 @@ def extract_exp_value(token):
             return int(value.strip())
     return None
 
-def generate_response(model, messages, temperature):
-    return copilot(messages=messages, model=model)
+def generate_response(model, messages, temperature, max_tokens):
+    return copilot(model=model, messages=messages, temperature=temperature, max_tokens=max_tokens)
 
 # OpenAI compatible API endpoint
 @app.route('/v1/chat/completions', methods=['POST'])
@@ -158,13 +158,14 @@ def chat_completions():
     model = data.get('model')
     messages = data.get('messages')
     temperature = data.get('temperature', 1.0)
+    max_tokens = data.get('max_tokens', 1000)
 
     done = False
     def generate():
         nonlocal done
-        response_content = generate_response(model, messages, temperature)
+        response_content = generate_response(model, messages, temperature, max_tokens)
         if response_content is None:
-            yield json.dumps({'error': 'API request failed'}).encode('utf-8'), 500
+            yield json.dumps({'error': 'API request failed'}).encode('utf-8')
             done = True
         else:
             yield json.dumps({
