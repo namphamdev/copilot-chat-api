@@ -20,8 +20,10 @@ pip install -r requirements.txt
 
 ## Run
 
+Run the local server with this command or use one of the scripts `windows.bat` or `mac-linux.sh` scripts to setup and run in a virtual environment.
+
 ```
-python3 api.py [port]
+python api.py [port]
 ```
 
 # Usage
@@ -54,7 +56,7 @@ Send a POST request to `http://localhost:8080/v1/chat/completions` with the foll
 
 ## Code Completion
 
-Send a POST request to `http://localhost:8080/api` with the following JSON body
+Send a POST request to `http://localhost:8080/v1/code/completions` with the following JSON body
 
 #### Payload
 
