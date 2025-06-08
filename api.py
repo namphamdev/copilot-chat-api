@@ -265,6 +265,31 @@ def copilot(model, prompt, language="python"):
     return result
 
 
+def models():
+    global token
+    # If the token is None, get a new one
+    if token is None or is_token_invalid(token):
+        get_token()
+    try:
+        resp = requests.get(
+            "https://api.individual.githubcopilot.com/models",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Editor-Version": "vscode/1.95.3",
+                "Editor-Plugin-Version": "copilot-chat/0.22.4",
+                "Openai-Intent": "conversation-panel",
+                "X-Github-Api-Version": "2023-07-07",
+            },
+        )
+    except requests.exceptions.ConnectionError:
+        return []
+
+    result = resp.json()
+    return result
+
+
 # Check if the token is invalid through the exp field
 def is_token_invalid(token):
     if token is None or "exp" not in token or extract_exp_value(token) <= time.time():
@@ -304,7 +329,7 @@ def chat_completions():
         return jsonify({"error": "Missing required fields"}), 400
 
     try:
-        if stream == False:
+        if not stream:
             done = False
 
             def generate():
@@ -361,6 +386,11 @@ def code_completions():
 
     completion = copilot(model, prompt, language)
     return app.response_class(completion, mimetype="text/plain")
+
+
+@app.route("/v1/models", methods=["GET"])
+def list_models():
+    return models()
 
 
 def main():
