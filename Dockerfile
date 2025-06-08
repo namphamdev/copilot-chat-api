@@ -12,7 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY api.py .
 
 # Expose port (adjust if your api.py uses a different port)
-EXPOSE 8000
+EXPOSE 8080
 
 # Set the default command to run the API
 CMD ["python", "api.py"]
