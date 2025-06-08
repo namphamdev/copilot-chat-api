@@ -111,7 +111,7 @@ def setup():
             break
 
     # Save the access token to a file
-    with open("data/.copilot_token", "w") as f:
+    with open("/app/data/.copilot_token", "w") as f:
         f.write(access_token)
 
     print(f"Access token: {access_token}")
@@ -123,10 +123,10 @@ def get_local_token():
         access_token = os.getenv("COPILOT_TOKEN")
         return access_token
     # if folder data does not exist, create it
-    if not os.path.exists("data"):
-        os.makedirs("data")
+    if not os.path.exists("/app/data"):
+        os.makedirs("/app/data")
     # Check if the .copilot_token file exists
-    with open("data/.copilot_token", "r") as f:
+    with open("/app/data/.copilot_token", "r") as f:
         access_token = f.read()
         return access_token
 
