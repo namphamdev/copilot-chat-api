@@ -122,6 +122,9 @@ def get_local_token():
     if os.getenv("COPILOT_TOKEN"):
         access_token = os.getenv("COPILOT_TOKEN")
         return access_token
+    # if folder data does not exist, create it
+    if not os.path.exists("data"):
+        os.makedirs("data")
     # Check if the .copilot_token file exists
     with open("data/.copilot_token", "r") as f:
         access_token = f.read()
